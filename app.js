@@ -322,14 +322,25 @@ function bind() {
 function removeEntry(id) { E = E.filter(function (x) { return x.id !== id; }); dropEntry(id); }
 function note(msg, err) { S.msg = msg; S.err = !!err; var m = document.getElementById('bm'); if (m) { m.textContent = msg; m.className = 'msg' + (err ? ' err' : ''); } }
 
+var NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+function nativeExport(json, name) {
+  var P = window.Capacitor.Plugins || {}, F = P.Filesystem, Sh = P.Share;
+  if (!F || !Sh) { note('השיתוף לא זמין במכשיר הזה.', true); return; }
+  F.writeFile({ path: name, data: json, directory: 'CACHE', encoding: 'utf8' })
+    .then(function (r) { return Sh.share({ title: 'גיבוי טריגרים', url: r.uri, dialogTitle: 'שמירת קובץ הגיבוי' }); })
+    .then(function () { note('קובץ הגיבוי מוכן לשמירה (למשל בקבצים או ב-Drive).'); })
+    .catch(function (e) { if (e && /cancel/i.test(String(e.message || e))) return; note('הייצוא לא הצליח.', true); });
+}
 function exportData() {
   try {
     var data = { app: 'triggers', version: 1, exported: new Date().toISOString(), triggers: T, entries: E };
+    var d = new Date();
+    var fname = 'triggers-backup-' + d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + '.json';
+    if (NATIVE) { nativeExport(JSON.stringify(data), fname); return; }
     var blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
     var a = document.createElement('a');
-    var d = new Date();
     a.href = URL.createObjectURL(blob);
-    a.download = 'triggers-backup-' + d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + '.json';
+    a.download = fname;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
     note('נוצר קובץ גיבוי עם ' + E.length + ' רישומים. הוא נשמר בתיקיית ההורדות.');
@@ -374,7 +385,7 @@ function start() {
     render();
     try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
   });
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
+  if (!NATIVE && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
 }
 start();
 })();

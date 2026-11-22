@@ -1,0 +1,62 @@
+name: Build Triggers APK
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '*.html'
+      - '*.css'
+      - '*.js'
+      - '*.webmanifest'
+      - '*.png'
+      - 'package.json'
+      - 'capacitor.config.json'
+      - 'scripts/**'
+      - 'assets/**'
+      - '.github/workflows/build-apk.yml'
+concurrency:
+  group: triggers-release
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Install
+        run: npm ci
+      - name: Build web and Android project
+        run: |
+          node scripts/build.mjs
+          npx cap add android
+          node scripts/patch-android.mjs
+          npx cap sync android
+      - name: Build signed APK
+        working-directory: android
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          VERSION_CODE: ${{ github.run_number }}
+        run: |
+          echo "$KEYSTORE_B64" | tr -d "\r\n " | base64 -d > "$RUNNER_TEMP/keystore.jks"
+          export KEYSTORE_PATH="$RUNNER_TEMP/keystore.jks"
+          ./gradlew assembleRelease
+      - name: Publish APK to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/apk/release/app-release.apk triggers-app.apk
+          if gh release view triggers-latest >/dev/null 2>&1; then
+            gh release upload triggers-latest triggers-app.apk --clobber
+          else
+            gh release create triggers-latest triggers-app.apk --title "Triggers app APK" --notes "Latest build. To update, install over the existing app."
+          fi

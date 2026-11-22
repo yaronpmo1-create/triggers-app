@@ -1,0 +1,7 @@
+{
+  "appId": "com.yaronpmo1.triggers",
+  "appName": "טריגרים",
+  "webDir": "www",
+  "server": { "androidScheme": "https" },
+  "android": { "allowMixedContent": false }
+}
