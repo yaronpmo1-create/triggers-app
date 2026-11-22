@@ -1,4 +1,4 @@
-// Copies the web files into www (the folder Capacitor packs into the APK).
+// Copies the web files into www (the folder Capacitor packs into the APK) and stamps the content version.
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -8,4 +8,6 @@ const files = ['index.html', 'style.css', 'app.js', 'manifest.webmanifest', 'ico
 fs.rmSync(www, { recursive: true, force: true });
 fs.mkdirSync(www, { recursive: true });
 for (const f of files) fs.copyFileSync(path.join(root, f), path.join(www, f));
-console.log('www ready:', files.length, 'files');
+const version = Number(process.env.GITHUB_RUN_NUMBER || process.env.TR_VERSION || 0);
+fs.writeFileSync(path.join(www, 'bundle.json'), JSON.stringify({ version }));
+console.log('www ready:', files.length, 'files, version', version);

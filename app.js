@@ -233,6 +233,7 @@ function settingsH() {
     (S.arm === 'all'
       ? '<button class="act2 red" id="clr">' + ic('trash') + '<span>לחיצה נוספת מוחקת את כל הרישומים</span></button>'
       : '<button class="act2 red" id="clr">' + ic('trash') + '<span>מחיקת כל הרישומים</span></button>') + '</div>';
+  h += updateCardH();
   h += '<div class="card"><h4>על האפליקציה</h4><p class="note" style="margin:0;color:#c5ccd6">כלי להתבוננות עצמית, לא טיפול ולא ייעוץ רפואי. אם קשה לך, כדאי לפנות לאיש מקצוע.</p></div>';
   return h;
 }
@@ -332,6 +333,8 @@ function bind() {
   function doAdd2() { addTrigger(st.value); if (!S.sel) S.sel = T[0] || ''; render(); }
   if (stok) stok.onclick = doAdd2;
   if (st) st.onkeydown = function (e) { if (e.key === 'Enter') doAdd2(); };
+  var chkb = main.querySelector('#chkb');
+  if (chkb) chkb.onclick = function () { checkUpdate(true); };
   var ex = main.querySelector('#ex'), im = main.querySelector('#im'), fi = main.querySelector('#fi'), clr = main.querySelector('#clr');
   if (ex) ex.onclick = exportData;
   if (im) im.onclick = function () { fi.click(); };
@@ -392,6 +395,115 @@ function importData(file) {
   r.readAsText(file);
 }
 
+/* ---------- in-app update (Android app only) ---------- */
+var TRP = NATIVE ? (window.Capacitor.Plugins || {}).Triggers : null;
+var REL = 'https://github.com/yaronpmo1-create/triggers-app/releases/download/triggers-latest/';
+var U = { cur: 0, info: { native: 1, apk: 0 }, avail: null, last: '', sheet: false, state: 'idle', pct: -1 };
+function usz(n) { return n > 1048576 ? (n / 1048576).toFixed(1) + ' מ״ב' : Math.max(1, Math.round(n / 1024)) + ' ק״ב'; }
+function updHeader() {
+  var b = document.getElementById('upd');
+  if (!b) return;
+  b.hidden = !TRP;
+  b.classList.toggle('has', !!U.avail);
+  b.classList.toggle('spin', U.state === 'checking');
+}
+function updateCardH() {
+  if (!TRP) return '<div class="card"><h4>עדכון האפליקציה</h4><p class="note" style="margin:0">האתר מתעדכן לבד בכל פתיחה עם אינטרנט.</p></div>';
+  return '<div class="card"><h4>עדכון האפליקציה</h4><div class="flex"><span style="flex:1;font-size:14.5px">גרסה ' + (U.cur || '—') +
+    '<small style="display:block;color:#8e98a8;font-size:12px;margin-top:2px">' + (U.avail ? 'יש גרסה חדשה: ' + U.avail.m.version : (U.last ? 'נבדק לאחרונה: ' + U.last : 'עוד לא נבדק')) +
+    '</small></span><button class="pill" id="chkb">' + (U.avail ? 'פתיחת העדכון' : 'בדיקת עדכון') + '</button></div></div>';
+}
+function sheetH() {
+  var a = U.avail, h = '<div class="sheet"><div class="grab"></div>';
+  if (U.state === 'checking') return h + '<h3>בודק עדכון...</h3></div>';
+  if (U.state === 'down') {
+    return h + '<h3>' + (a && a.type === 'apk' ? 'מוריד את קובץ ההתקנה' : 'מוריד את העדכון') + '</h3><div class="pbar"><i id="pb" style="width:' + Math.max(U.pct, 4) + '%"></i></div><div class="ver" id="pt">' + (U.pct >= 0 ? U.pct + '%' : 'מוריד...') + '</div></div>';
+  }
+  if (U.state === 'wait') return h + '<h3>מפעיל מחדש עם הגרסה החדשה</h3></div>';
+  if (U.state === 'installing') return h + '<h3>נפתח חלון ההתקנה של Android</h3><div class="ver">לאשר "התקנה" ולחזור לאפליקציה. הנתונים נשארים.</div><button class="go" id="sok">סגירה</button></div>';
+  if (U.state === 'perm') return h + '<h3>צריך לאפשר התקנה מהאפליקציה</h3><div class="ver">נפתחו ההגדרות של Android. מאפשרים "התקנת אפליקציות" לאפליקציה הזו, חוזרים ולוחצים שוב.</div><button class="go" id="sgo">נסה שוב</button><button class="later" id="slater">סגירה</button></div>';
+  if (U.state === 'err') return h + '<h3>העדכון לא הצליח</h3><div class="ver">בדוק חיבור לאינטרנט ונסה שוב. הגרסה הנוכחית נשארת כמו שהיא.</div><button class="go" id="sok">סגירה</button></div>';
+  if (!a) return h + '<h3>אין עדכון חדש</h3><div class="ver">הגרסה שלך, ' + (U.cur || '—') + ', היא האחרונה.</div><button class="go" id="sok">סגירה</button></div>';
+  var m = a.m, apk = a.type === 'apk';
+  h += '<h3>' + (apk ? 'גרסה חדשה דורשת התקנה' : 'גרסה חדשה זמינה') + '</h3><div class="ver">' + (U.cur || '—') + ' ← ' + m.version + ' · ' + (apk ? 'כ-3 מ״ב' : usz(m.size)) + '</div><ul>';
+  var notes = (m.notes && m.notes.length) ? m.notes : ['שיפורים ותיקונים'];
+  notes.forEach(function (n) { h += '<li>' + esc(n) + '</li>'; });
+  if (apk) h += '<li>Android ישאל אישור להתקנה</li><li>הנתונים שלך נשארים</li>';
+  h += '</ul><button class="go" id="sgo">' + ic('down', 'sv') + '<span>' + (apk ? 'הורדה והתקנה' : 'עדכון עכשיו') + '</span></button><button class="later" id="slater">לא עכשיו</button></div>';
+  return h;
+}
+function renderSheet() {
+  var sh = document.getElementById('sheet');
+  if (!sh) return;
+  sh.className = 'ov' + (U.sheet ? ' show' : '');
+  sh.innerHTML = U.sheet ? sheetH() : '';
+  var go = document.getElementById('sgo'), later = document.getElementById('slater'), ok = document.getElementById('sok');
+  if (go) go.onclick = applyUpdate;
+  if (later) later.onclick = function () { U.sheet = false; U.state = 'idle'; renderSheet(); };
+  if (ok) ok.onclick = function () { U.sheet = false; U.state = 'idle'; renderSheet(); };
+  sh.onclick = function (e) { if (e.target === sh && U.state !== 'down' && U.state !== 'wait') { U.sheet = false; U.state = 'idle'; renderSheet(); } };
+}
+function updProg(pct) {
+  U.pct = pct;
+  var pb = document.getElementById('pb'), pt = document.getElementById('pt');
+  if (pb) pb.style.width = Math.max(pct, 4) + '%';
+  if (pt) pt.textContent = pct >= 0 ? pct + '%' : 'מוריד...';
+}
+function checkUpdate(manual) {
+  if (!TRP) return;
+  if (manual && U.avail) { U.sheet = true; U.state = 'idle'; renderSheet(); return; }
+  U.state = 'checking'; updHeader();
+  if (manual) { U.sheet = true; renderSheet(); }
+  TRP.otaFetch({ url: REL + 'ota.json' }).then(function (r) {
+    var m = JSON.parse(r.text);
+    U.last = hm(Date.now());
+    U.avail = m.version > U.cur ? { m: m, type: m.minNative > U.info.native ? 'apk' : 'ota' } : null;
+    U.state = 'idle'; updHeader();
+    if (U.sheet) renderSheet();
+    if (S.tab === 3) render();
+  }).catch(function () {
+    U.state = manual ? 'err' : 'idle'; updHeader();
+    if (U.sheet) renderSheet();
+  });
+}
+function applyUpdate() {
+  var a = U.avail;
+  if (!a || !TRP) return;
+  U.state = 'down'; U.pct = -1; renderSheet(); updHeader();
+  if (a.type === 'apk') {
+    TRP.apkInstall({ url: REL + 'triggers-app.apk' }).then(function () { U.state = 'installing'; renderSheet(); })
+      .catch(function (e) { U.state = String(e && (e.message || e)).indexOf('perm') >= 0 ? 'perm' : 'err'; renderSheet(); });
+    return;
+  }
+  TRP.otaDownload({ url: REL + 'bundle.zip', sha256: a.m.sha256, version: String(a.m.version), minNative: a.m.minNative }).then(function () {
+    U.state = 'wait'; renderSheet();
+    try { localStorage.setItem('tr_updated', String(a.m.version)); } catch (x) {}
+    return TRP.otaReload();
+  }).catch(function () { U.state = 'err'; renderSheet(); });
+}
+function showToast(t) {
+  var x = document.getElementById('toast');
+  if (!x) return;
+  x.textContent = t; x.classList.add('show');
+  setTimeout(function () { x.classList.remove('show'); }, 3000);
+}
+function startUpdates() {
+  var upd = document.getElementById('upd');
+  if (upd) upd.onclick = function () { checkUpdate(true); };
+  if (!TRP) { updHeader(); return; }
+  try { TRP.addListener('otaProgress', function (e) { updProg(e.pct); }); TRP.addListener('apkProgress', function (e) { updProg(e.pct); }); } catch (x) {}
+  fetch('bundle.json', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) { U.cur = j.version || 0; }).catch(function () {})
+    .then(function () { return TRP.otaInfo(); }).then(function (i) { U.info = i; }).catch(function () {})
+    .then(function () {
+      try { TRP.otaOk(); } catch (x) {}
+      try {
+        var v = localStorage.getItem('tr_updated');
+        if (v) { localStorage.removeItem('tr_updated'); showToast('האפליקציה עודכנה לגרסה ' + v); }
+      } catch (x) {}
+      updHeader(); checkUpdate(false);
+    });
+}
+
 /* ---------- start ---------- */
 function start() {
   dbOpen().then(function () {
@@ -405,6 +517,7 @@ function start() {
     if (typeof r[3] === 'number') S.lvl = r[3];
     document.getElementById('date').textContent = new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'numeric' });
     render();
+    startUpdates();
     try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
   });
   if (!NATIVE && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});

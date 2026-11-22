@@ -14,6 +14,9 @@ const copyDir = (from, to) => {
   }
 };
 
+// 0. Native code (in-app updates); also replaces the generated MainActivity
+copyDir(path.join(root, 'native/java/com/yaronpmo1/triggers'), path.join(main, 'java/com/yaronpmo1/triggers'));
+
 // 1. Icons: drop the adaptive-icon folder so our own icon shows on every Android version
 fs.rmSync(path.join(main, 'res/mipmap-anydpi-v26'), { recursive: true, force: true });
 for (const d of fs.readdirSync(path.join(root, 'assets/icons'), { withFileTypes: true })) {
@@ -23,8 +26,10 @@ for (const d of fs.readdirSync(path.join(root, 'assets/icons'), { withFileTypes:
 // Vibration for the button press
 const mfp = path.join(main, 'AndroidManifest.xml');
 let mf = fs.readFileSync(mfp, 'utf8');
-if (!mf.includes('android.permission.VIBRATE')) {
-  mf = mf.replace('</manifest>', '    <uses-permission android:name="android.permission.VIBRATE" />\n</manifest>');
+for (const p of ['VIBRATE', 'REQUEST_INSTALL_PACKAGES']) {
+  if (!mf.includes('android.permission.' + p)) {
+    mf = mf.replace('</manifest>', '    <uses-permission android:name="android.permission.' + p + '" />\n</manifest>');
+  }
 }
 fs.writeFileSync(mfp, mf);
 

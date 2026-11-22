@@ -12,10 +12,14 @@
 </head>
 <body>
 <div id="app">
-  <header class="top"><h1>טריגרים</h1><span id="date"></span></header>
+  <header class="top"><h1>טריגרים</h1><span id="date"></span>
+    <button class="upd" id="upd" type="button" hidden title="עדכון האפליקציה" aria-label="עדכון האפליקציה"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v10M7.5 10.5L12 15l4.5-4.5M5 19h14"/></svg><span class="badge">1</span></button>
+  </header>
   <main id="main"></main>
   <div class="ft">כלי להתבוננות עצמית, לא טיפול</div>
   <nav id="nav"></nav>
+  <div id="sheet" class="ov"></div>
+  <div id="toast" class="toast"></div>
 </div>
 <script src="app.js"></script>
 </body>

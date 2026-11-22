@@ -3,3 +3,4 @@ android/
 www/
 *.jks
 *.keystore
+ota-out/

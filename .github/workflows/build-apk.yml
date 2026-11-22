@@ -12,6 +12,8 @@ on:
       - 'capacitor.config.json'
       - 'scripts/**'
       - 'assets/**'
+      - 'native/**'
+      - 'notes.txt'
       - '.github/workflows/build-apk.yml'
 concurrency:
   group: triggers-release
@@ -35,6 +37,7 @@ jobs:
       - name: Build web and Android project
         run: |
           node scripts/build.mjs
+          node scripts/make-ota.mjs
           npx cap add android
           node scripts/patch-android.mjs
           npx cap sync android
@@ -56,7 +59,9 @@ jobs:
         run: |
           cp android/app/build/outputs/apk/release/app-release.apk triggers-app.apk
           if gh release view triggers-latest >/dev/null 2>&1; then
-            gh release upload triggers-latest triggers-app.apk --clobber
+            gh release upload triggers-latest triggers-app.apk ota-out/bundle.zip --clobber
           else
-            gh release create triggers-latest triggers-app.apk --title "Triggers app APK" --notes "Latest build. To update, install over the existing app."
+            gh release create triggers-latest triggers-app.apk ota-out/bundle.zip --title "Triggers app APK" --notes "Latest build. To update, install over the existing app."
           fi
+          # ota.json last: the app only sees a new version once the files it points to are in place
+          gh release upload triggers-latest ota-out/ota.json --clobber
