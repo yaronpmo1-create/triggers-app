@@ -28,7 +28,7 @@ var TP = {
 function ic(k, cls) {
   return '<svg class="' + (cls || 'sv') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (TP[k] || TP._) + '</svg>';
 }
-function tic(name) { return ic(TP[name] ? name : '_', 'tic'); }
+function tic(name) { return ic(TP[name] ? name : '_', 'tic').replace('<svg ', '<svg style="color:' + colorOf(name) + '" '); }
 
 /* ---------- small helpers ---------- */
 function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
@@ -43,11 +43,28 @@ function dayLabel(ts) {
   if (d === t - 864e5) return 'אתמול';
   return new Date(ts).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'numeric' });
 }
+var FIXED = { 'דוא"ל מהעבודה': '#5ea2ff', 'רעש': '#c58bff', 'עייפות': '#ffd166', 'ויכוח': '#ff8a65', 'איחור': '#4fd1c5', 'פרסומות': '#ff8fc8' };
 function colorOf(name) {
+  if (FIXED[name]) return FIXED[name];
   var h = 0, i;
   for (i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
   return COLS[h % COLS.length];
 }
+function hex2(c) { return [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)]; }
+function mix(a, b, t) {
+  var x = hex2(a), y = hex2(b), r = [0, 1, 2].map(function (i) { return Math.round(x[i] + (y[i] - x[i]) * t); });
+  return '#' + r.map(function (n) { return ('0' + n.toString(16)).slice(-2); }).join('');
+}
+/* intensity scale: green (weak) to dark red (strong) */
+var STOPS = [[0, '#2ecc71'], [4, '#f1c40f'], [6.5, '#f39c12'], [8.5, '#e74c3c'], [10, '#8b0000']];
+function lvColor(v) {
+  for (var i = 1; i < STOPS.length; i++) {
+    if (v <= STOPS[i][0]) { var a = STOPS[i - 1], b = STOPS[i]; return mix(a[1], b[1], (v - a[0]) / (b[0] - a[0])); }
+  }
+  return STOPS[STOPS.length - 1][1];
+}
+var GRAD = 'linear-gradient(to left,#2ecc71 0%,#f1c40f 40%,#f39c12 65%,#e74c3c 85%,#8b0000 100%)';
+function flBg(v) { return 'background-image:' + GRAD + ';background-size:' + Math.round(1000 / Math.max(v, 0.3)) + '% 100%;background-position:right;background-repeat:no-repeat'; }
 
 /* ---------- storage: IndexedDB with in-memory fallback ---------- */
 var db = null;
@@ -99,13 +116,13 @@ function rowH(x) {
   var o = S.open === x.id, sub = [];
   if (x.n) sub.push(esc(x.n));
   if (x.help) sub.push('מה עזר: ' + esc(x.help));
-  return '<div class="row" data-o="' + x.id + '"><span class="dt" style="background:' + colorOf(x.tr) + '"></span><span class="tx">' + esc(x.tr) +
+  return '<div class="row" data-o="' + x.id + '"><span class="ri">' + tic(x.tr) + '</span><span class="tx">' + esc(x.tr) +
     (sub.length ? '<span class="sb">' + sub.join('<br>') + '</span>' : '') +
     (o ? '<span class="act"><input class="in" data-en="' + x.id + '" placeholder="הערה (לא חובה)" maxlength="500" value="' + esc(x.n || '') + '"><input class="in" data-eh="' + x.id + '" placeholder="מה עזר? (לא חובה)" maxlength="500" value="' + esc(x.help || '') + '">' +
       (S.arm === 'e' + x.id
         ? '<button class="ibtn red arm" data-del="' + x.id + '" aria-label="אישור מחיקה">' + ic('trash', 'sv') + ' למחוק?</button>'
         : '<button class="ibtn red" data-del="' + x.id + '" title="מחיקת הרישום" aria-label="מחיקת הרישום">' + ic('trash', 'sv') + '</button>') + '</span>' : '') +
-    '</span><span class="ds">' + fmt(x.lv) + '</span><span class="tm">' + hm(x.ts) + '</span></div>';
+    '</span><span class="ds" style="color:' + lvColor(x.lv) + '">' + fmt(x.lv) + '</span><span class="tm">' + hm(x.ts) + '</span></div>';
 }
 
 function homeH() {
@@ -115,18 +132,19 @@ function homeH() {
   } else {
     h += '<div class="tiles">';
     T.forEach(function (t) {
-      h += '<button class="tile' + (S.sel === t ? ' on' : '') + '" data-s="' + esc(t) + '" title="' + esc(t) + '" aria-label="' + esc(t) + '">' + tic(t) + '<span>' + esc(t) + '</span></button>';
+      h += '<button class="tile' + (S.sel === t ? ' on' : '') + '" style="--c:' + colorOf(t) + '" data-s="' + esc(t) + '" title="' + esc(t) + '" aria-label="' + esc(t) + '">' + tic(t) + '<span>' + esc(t) + '</span></button>';
     });
   }
   if (!T.length) h += '<div class="tiles">';
   h += '<button class="tile add" id="ad" title="טריגר חדש" aria-label="טריגר חדש">' + ic('+', 'tic') + '<span>חדש</span></button></div>';
   if (S.adding) h += '<div class="flex" style="margin-top:10px"><input class="in" id="nt" placeholder="שם הטריגר החדש" maxlength="30"><button class="ibtn" id="ntok" title="הוספה" aria-label="הוספת טריגר">' + ic('check') + '</button></div>';
   if (T.length) {
-    h += '<div class="lbl flex" style="justify-content:space-between;margin-top:14px"><span>עוצמה: מחליקים אצבע על הפס</span><b id="lvn" style="color:#e8ecf1;font-size:15px">' + fmt(S.lvl) + '</b></div>';
-    h += '<div class="sl" id="b5" tabindex="0" role="slider" aria-label="עוצמה" aria-valuemin="0" aria-valuemax="10" aria-valuenow="' + fmt(S.lvl) + '"><div class="tk"></div><div class="fl" style="width:' + S.lvl * 10 + '%"></div><div class="th" style="inset-inline-start:calc(' + S.lvl * 10 + '% - 14px)"></div></div>';
+    h += '<div class="lbl flex" style="justify-content:space-between;margin-top:14px"><span>עוצמה: מחליקים אצבע על הפס</span><b id="lvn" style="color:' + lvColor(S.lvl) + ';font-size:16px">' + fmt(S.lvl) + '</b></div>';
+    h += '<div class="sl" id="b5" tabindex="0" role="slider" aria-label="עוצמה" aria-valuemin="0" aria-valuemax="10" aria-valuenow="' + fmt(S.lvl) + '"><div class="tk"></div><div class="fl" style="width:' + S.lvl * 10 + '%;' + flBg(S.lvl) + '"></div><div class="th" style="inset-inline-start:calc(' + S.lvl * 10 + '% - 14px);background:' + lvColor(S.lvl) + '"></div></div>';
     h += '<div class="lvs"><span>0</span><span>10</span></div>';
     var today = startOfDay(Date.now()), cs = E.filter(function (x) { return x.tr === S.sel && x.ts >= today; }).length;
-    h += '<button class="big" id="bg">' + tic(S.sel) + '<span>' + esc(S.sel) + '</span><small>היום: ' + cs + '</small></button>';
+    var bc = colorOf(S.sel);
+    h += '<div class="bigwrap"><button class="big" id="bg" style="--c:' + bc + ';--cl:' + mix(bc, '#ffffff', 0.45) + ';--cd:' + mix(bc, '#000000', 0.4) + '">' + tic(S.sel).replace(/style="color:[^"]*"/, '') + '<span>' + esc(S.sel) + '</span><small>היום: ' + cs + '</small></button></div>';
     h += '<div class="hint">לחיצה רושמת: ' + esc(S.sel) + ', עוצמה ' + fmt(S.lvl) + '</div>';
   }
   var L = entryById(S.last);
@@ -151,7 +169,7 @@ function journalH() {
   var names = T.slice();
   E.forEach(function (x) { if (names.indexOf(x.tr) < 0) names.push(x.tr); });
   var h = '<div class="chips"><button data-f="" class="' + (S.filter === '' ? 'on' : '') + '">הכול</button>';
-  names.forEach(function (t) { h += '<button data-f="' + esc(t) + '" class="' + (S.filter === t ? 'on' : '') + '">' + esc(t) + '</button>'; });
+  names.forEach(function (t) { h += '<button data-f="' + esc(t) + '" class="' + (S.filter === t ? 'on' : '') + '" style="--c:' + colorOf(t) + '"><span class="ci">' + tic(t) + '</span>' + esc(t) + '</button>'; });
   h += '</div>';
   var list = sorted().filter(function (x) { return S.filter === '' || x.tr === S.filter; });
   if (!list.length) return h + '<div class="empty">אין עדיין רישומים. הרישום הראשון נעשה במסך הבית.</div>';
@@ -194,14 +212,14 @@ function statsH() {
   hrs.forEach(function (v) { h += '<i style="height:' + Math.round(v / hx * 100) + '%"></i>'; });
   h += '</div><div class="hl"><span>0</span><span>6</span><span>12</span><span>18</span><span>23</span></div></div>';
   h += '<div class="card"><h4>מה חוזר הכי הרבה (30 יום)</h4>';
-  names.forEach(function (k) { h += '<div class="bar"><span>' + esc(k) + '</span><i style="width:' + Math.round(cnt[k] / mx * 100) + '%;background:' + colorOf(k) + '"></i><span>' + cnt[k] + '</span></div>'; });
+  names.forEach(function (k) { h += '<div class="bar"><span class="bn"><span class="ri">' + tic(k) + '</span>' + esc(k) + '</span><i style="width:' + Math.round(cnt[k] / mx * 100) + '%;background:' + colorOf(k) + '"></i><span>' + cnt[k] + '</span></div>'; });
   return h + '</div>';
 }
 
 function settingsH() {
   var h = '<div class="card"><h4>הטריגרים שלי</h4>';
   T.forEach(function (t, k) {
-    h += '<div class="lrow"><span class="dt" style="background:' + colorOf(t) + '"></span><span class="sp">' + esc(t) + '</span><button class="ibtn red" data-rm="' + k + '" title="הסרת הטריגר" aria-label="הסרת ' + esc(t) + '">' + ic('trash') + '</button></div>';
+    h += '<div class="lrow"><span class="ri">' + tic(t) + '</span><span class="sp">' + esc(t) + '</span><button class="ibtn red" data-rm="' + k + '" title="הסרת הטריגר" aria-label="הסרת ' + esc(t) + '">' + ic('trash') + '</button></div>';
   });
   h += '<div class="flex" style="margin-top:10px"><input class="in" id="st" placeholder="טריגר חדש" maxlength="30"><button class="ibtn" id="stok" title="הוספה" aria-label="הוספת טריגר">' + ic('check') + '</button></div>';
   h += '<p class="note">הסרת טריגר לא מוחקת רישומים קיימים שלו.</p></div>';
@@ -249,6 +267,7 @@ function bind() {
 
   var bg = main.querySelector('#bg');
   if (bg) bg.onclick = function () {
+    try { if (navigator.vibrate) navigator.vibrate(18); } catch (x) {}
     var e = { id: nextId(), tr: S.sel, lv: S.lvl, ts: Date.now(), n: '', help: '' };
     E.push(e); saveEntry(e); S.last = e.id; S.toast = true; S.detail = false; render();
   };
@@ -274,10 +293,13 @@ function bind() {
     var dr = false;
     var setL = function (v) {
       v = Math.round(Math.min(10, Math.max(0, v)) * 10) / 10; S.lvl = v;
-      b5.querySelector('.fl').style.width = v * 10 + '%';
-      b5.querySelector('.th').style.insetInlineStart = 'calc(' + v * 10 + '% - 14px)';
+      var fl = b5.querySelector('.fl'), th = b5.querySelector('.th'), c = lvColor(v);
+      fl.style.width = v * 10 + '%';
+      fl.style.backgroundSize = Math.round(1000 / Math.max(v, 0.3)) + '% 100%';
+      th.style.insetInlineStart = 'calc(' + v * 10 + '% - 14px)';
+      th.style.background = c;
       b5.setAttribute('aria-valuenow', fmt(v));
-      document.getElementById('lvn').textContent = fmt(v);
+      var ln = document.getElementById('lvn'); ln.textContent = fmt(v); ln.style.color = c;
       var hn = main.querySelector('.hint'); if (hn) hn.textContent = 'לחיצה רושמת: ' + S.sel + ', עוצמה ' + fmt(v);
     };
     var fromX = function (e) { var r = b5.getBoundingClientRect(); setL((r.right - e.clientX) / r.width * 10); };
