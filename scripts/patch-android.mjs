@@ -23,8 +23,9 @@ for (const d of fs.readdirSync(path.join(root, 'assets/icons'), { withFileTypes:
 // Vibration for the button press
 const mfp = path.join(main, 'AndroidManifest.xml');
 let mf = fs.readFileSync(mfp, 'utf8');
-if (!mf.includes('android.permission.VIBRATE')) mf = mf.replace('</manifest>', '    <uses-permission android:name="android.permission.VIBRATE" />
-</manifest>');
+if (!mf.includes('android.permission.VIBRATE')) {
+  mf = mf.replace('</manifest>', '    <uses-permission android:name="android.permission.VIBRATE" />\n</manifest>');
+}
 fs.writeFileSync(mfp, mf);
 
 // 2. Dark theme and splash
