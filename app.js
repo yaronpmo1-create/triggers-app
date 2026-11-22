@@ -16,6 +16,7 @@ var TP = {
   'פרסומות': '<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1"/>',
   '+': '<path d="M12 5v14M5 12h14"/>',
   '_': '<path d="M12 3v5M12 16v5M3 12h5M16 12h5M6 6l3 3M15 15l3 3M18 6l-3 3M9 15l-3 3"/>',
+  'refresh': '<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>',
   'home': '<path d="M3 11l9-8 9 8v10H3z"/>',
   'book': '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 19V5M9 7h6"/>',
   'chart': '<path d="M5 20V10M12 20V4M19 20v-7"/>',
@@ -108,7 +109,7 @@ function getMeta(k) { return dbReq('meta', 'readonly', function (s) { return s.g
 /* ---------- state ---------- */
 var E = [];        /* entries: {id, tr, lv, ts, n, help} */
 var T = [];        /* trigger names */
-var S = { tab: 0, sel: '', lvl: 5, last: -1, toast: false, detail: false, adding: false, filter: '', open: -1, arm: '', msg: '', err: false, persisted: true };
+var S = { order: [0, 2, 1, 3], tab: 0, sel: '', lvl: 5, last: -1, toast: false, detail: false, adding: false, filter: '', open: -1, arm: '', msg: '', err: false, persisted: true };
 
 function nextId() { var m = 0; E.forEach(function (x) { if (x.id > m) m = x.id; }); return m + 1; }
 function saveTriggers() { setMeta('triggers', T.slice()); }
@@ -131,27 +132,32 @@ function rowH(x) {
     '</span><span class="ds" style="color:' + lvColor(x.lv) + '">' + fmt(x.lv) + '</span><span class="tm">' + hm(x.ts) + '</span></div>';
 }
 
+function top30H() {
+  var t0 = startOfDay(Date.now()), cnt = {};
+  E.forEach(function (x) { if (x.ts >= t0 - 29 * 864e5) cnt[x.tr] = (cnt[x.tr] || 0) + 1; });
+  var names = Object.keys(cnt).sort(function (p, q) { return cnt[q] - cnt[p]; }), mx = cnt[names[0]] || 1;
+  var h = '<div class="card"><h4>מה חוזר הכי הרבה (30 יום)</h4>';
+  if (!names.length) h += '<div class="empty" style="padding:8px">הסטטיסטיקה תופיע אחרי הרישומים הראשונים.</div>';
+  names.forEach(function (k) { h += '<div class="bar"><span class="bn"><span class="ri">' + tic(k) + '</span>' + esc(k) + '</span><i style="width:' + Math.round(cnt[k] / mx * 100) + '%;background:' + colorOf(k) + '"></i><span>' + cnt[k] + '</span></div>'; });
+  return h + '</div>';
+}
+
 function homeH() {
   var h = '';
-  if (!T.length) {
-    h += '<div class="empty">עוד אין טריגרים. מוסיפים את הראשון:</div>';
-  } else {
-    h += '<div class="tiles">';
-    T.forEach(function (t) {
-      h += '<button class="tile' + (S.sel === t ? ' on' : '') + '" style="--c:' + colorOf(t) + '" data-s="' + esc(t) + '" title="' + esc(t) + '" aria-label="' + esc(t) + '">' + tic(t) + '<span>' + esc(t) + '</span></button>';
-    });
-  }
-  if (!T.length) h += '<div class="tiles">';
+  if (!T.length) h += '<div class="empty">עוד אין טריגרים. מוסיפים את הראשון:</div>';
+  h += '<div class="tiles" id="tl">';
+  T.forEach(function (t) {
+    h += '<button class="tile' + (S.sel === t ? ' on' : '') + '" style="--c:' + colorOf(t) + '" data-s="' + esc(t) + '" title="' + esc(t) + '" aria-label="' + esc(t) + '">' + tic(t) + '<span>' + esc(t) + '</span></button>';
+  });
   h += '<button class="tile add" id="ad" title="טריגר חדש" aria-label="טריגר חדש">' + ic('+', 'tic') + '<span>חדש</span></button></div>';
   if (S.adding) h += '<div class="flex" style="margin-top:10px"><input class="in" id="nt" placeholder="שם הטריגר החדש" maxlength="30"><button class="ibtn" id="ntok" title="הוספה" aria-label="הוספת טריגר">' + ic('check') + '</button></div>';
   if (T.length) {
-    h += '<div class="lbl flex" style="justify-content:space-between;margin-top:14px"><span>עוצמה: מחליקים אצבע על הפס</span><b id="lvn" style="color:' + lvColor(S.lvl) + ';font-size:16px">' + fmt(S.lvl) + '</b></div>';
-    h += '<div class="sl" id="b5" tabindex="0" role="slider" aria-label="עוצמה" aria-valuemin="0" aria-valuemax="10" aria-valuenow="' + fmt(S.lvl) + '"><div class="tk"></div><div class="fl" style="width:' + S.lvl * 10 + '%;' + flBg(S.lvl) + '"></div><div class="th" style="inset-inline-start:calc(' + S.lvl * 10 + '% - 14px);background:' + lvColor(S.lvl) + '"></div></div>';
-    h += '<div class="lvs"><span>0</span><span>10</span></div>';
     var today = startOfDay(Date.now()), cs = E.filter(function (x) { return x.tr === S.sel && x.ts >= today; }).length;
     h += '<div class="bigwrap"><button class="big' + (S.pulse ? ' pulse' : '') + '" id="bg" style="' + bigStyle(S.lvl) + '">' + tic(S.sel).replace(/style="color:[^"]*"/, '') + '<span>' + esc(S.sel) + '</span><small>היום: ' + cs + '</small></button></div>';
     S.pulse = false;
-    h += '<div class="hint">לחיצה רושמת: ' + esc(S.sel) + ', עוצמה ' + fmt(S.lvl) + '</div>';
+    h += '<div class="lbl flex" style="justify-content:space-between"><span>עוצמה: מחליקים אצבע על הפס</span><b id="lvn" style="color:' + lvColor(S.lvl) + ';font-size:16px">' + fmt(S.lvl) + '</b></div>';
+    h += '<div class="sl" id="b5" tabindex="0" role="slider" aria-label="עוצמה" aria-valuemin="0" aria-valuemax="10" aria-valuenow="' + fmt(S.lvl) + '"><div class="tk"></div><div class="fl" style="width:' + S.lvl * 10 + '%;' + flBg(S.lvl) + '"></div><div class="th" style="inset-inline-start:calc(' + S.lvl * 10 + '% - 14px);background:' + lvColor(S.lvl) + '"></div></div>';
+    h += '<div class="lvs"><span>0</span><span>10</span></div>';
   }
   var L = entryById(S.last);
   if (S.toast && L) {
@@ -164,11 +170,7 @@ function homeH() {
     h += '<div class="lbl">מה עזר?</div><input class="in" id="nh" maxlength="500" placeholder="לא חובה" value="' + esc(L.help || '') + '">';
     h += '<button class="save" id="sv" title="סיום" aria-label="סיום">' + ic('check') + '<span>סיום</span></button></div>';
   }
-  var td = startOfDay(Date.now()), list = sorted().filter(function (x) { return x.ts >= td; });
-  h += '<div class="card"><h4>היום</h4>';
-  if (!list.length) h += '<div class="empty" style="padding:8px">עוד לא נרשם כלום היום.</div>';
-  list.forEach(function (x) { h += rowH(x); });
-  return h + '</div>';
+  return h + top30H();
 }
 
 function journalH() {
@@ -209,7 +211,6 @@ function statsH() {
   m30.forEach(function (x) { hrs[new Date(x.ts).getHours()]++; cnt[x.tr] = (cnt[x.tr] || 0) + 1; });
   var names = Object.keys(cnt).sort(function (a, b) { return cnt[b] - cnt[a]; }), mx = cnt[names[0]] || 1;
   var h = '<div class="two"><div class="card"><b>' + streak + '</b><small>ימים ברצף</small></div><div class="card"><b>' + m30.length + '</b><small>ב-30 הימים האחרונים</small></div></div>';
-  h += '<div class="card"><h4>מגמה</h4><div style="font-size:13.5px;line-height:1.6">ב-7 הימים האחרונים ' + tot + ' רישומים, ובשבוע שלפניהם ' + prev + '. ' + (df < 0 ? 'ירידה של ' + (-df) : df > 0 ? 'עלייה של ' + df : 'ללא שינוי') + '.</div></div>';
   var wm = Math.max.apply(null, wk.map(function (w) { return w.n; })) || 1;
   h += '<div class="card"><h4>7 הימים האחרונים</h4><div class="cols">';
   wk.forEach(function (w) { h += '<div class="' + (w.today ? 'today' : '') + '"><span>' + w.n + '</span><i style="height:' + Math.round(w.n / wm * 62) + 'px"></i>' + w.d + '</div>'; });
@@ -217,9 +218,9 @@ function statsH() {
   var hx = Math.max.apply(null, hrs) || 1;
   hrs.forEach(function (v) { h += '<i style="height:' + Math.round(v / hx * 100) + '%"></i>'; });
   h += '</div><div class="hl"><span>0</span><span>6</span><span>12</span><span>18</span><span>23</span></div></div>';
-  h += '<div class="card"><h4>מה חוזר הכי הרבה (30 יום)</h4>';
-  names.forEach(function (k) { h += '<div class="bar"><span class="bn"><span class="ri">' + tic(k) + '</span>' + esc(k) + '</span><i style="width:' + Math.round(cnt[k] / mx * 100) + '%;background:' + colorOf(k) + '"></i><span>' + cnt[k] + '</span></div>'; });
-  return h + '</div>';
+  h += top30H();
+  h += '<div class="card"><h4>מגמה</h4><div style="font-size:13.5px;line-height:1.6">ב-7 הימים האחרונים ' + tot + ' רישומים, ובשבוע שלפניהם ' + prev + '. ' + (df < 0 ? 'ירידה של ' + (-df) : df > 0 ? 'עלייה של ' + df : 'ללא שינוי') + '.</div></div>';
+  return h;
 }
 
 function settingsH() {
@@ -243,12 +244,57 @@ function settingsH() {
   return h;
 }
 
+var TABS = [['בית', 'home'], ['יומן', 'book'], ['נתונים', 'chart'], ['הגדרות', 'gear']];
+var noClick = 0;
+function sortable(box, sel, done) {
+  if (!box) return;
+  var drag = null, arr = [], timer = 0, sx = 0, sy = 0, before = '';
+  function items() { return [].slice.call(box.querySelectorAll(sel)); }
+  function stop(e) { e.preventDefault(); }
+  function apply() { arr.forEach(function (el, i) { el.style.order = i; }); }
+  function end(commit) {
+    clearTimeout(timer); timer = 0;
+    if (!drag) return;
+    var it = drag, changed = arr.map(function (el) { return el.dataset.s || el.dataset.n; }).join('|') !== before;
+    drag = null; it.classList.remove('drag');
+    document.removeEventListener('touchmove', stop, { passive: false });
+    if (commit && changed) { noClick = Date.now(); done(arr.slice()); }
+    else arr.forEach(function (el) { el.style.order = ''; });
+  }
+  box.addEventListener('pointerdown', function (e) {
+    var it = e.target.closest(sel);
+    if (!it || !box.contains(it)) return;
+    sx = e.clientX; sy = e.clientY;
+    clearTimeout(timer);
+    timer = setTimeout(function () {
+      drag = it; arr = items(); before = arr.map(function (el) { return el.dataset.s || el.dataset.n; }).join('|');
+      apply(); it.classList.add('drag');
+      document.addEventListener('touchmove', stop, { passive: false });
+      try { if (navigator.vibrate) navigator.vibrate(14); } catch (x) {}
+    }, 420);
+  });
+  box.addEventListener('pointermove', function (e) {
+    if (!drag) { if (timer && Math.hypot(e.clientX - sx, e.clientY - sy) > 10) { clearTimeout(timer); timer = 0; } return; }
+    var el = document.elementFromPoint(e.clientX, e.clientY), t = el && el.closest(sel);
+    if (t && t !== drag && box.contains(t)) {
+      var di = arr.indexOf(drag), ti = arr.indexOf(t);
+      arr.splice(di, 1);
+      arr.splice(ti, 0, drag);
+      apply();
+    }
+  });
+  box.addEventListener('pointerup', function () { end(true); });
+  box.addEventListener('pointercancel', function () { end(false); });
+}
 function render() {
   main.innerHTML = [homeH, journalH, statsH, settingsH][S.tab]();
-  var tabs = [['בית', 'home'], ['יומן', 'book'], ['נתונים', 'chart'], ['הגדרות', 'gear']], n = '';
-  tabs.forEach(function (t, k) { n += '<button data-n="' + k + '" class="' + (S.tab === k ? 'on' : '') + '">' + ic(t[1]) + t[0] + '</button>'; });
+  var n = '';
+  S.order.forEach(function (k) { var t = TABS[k]; n += '<button data-n="' + k + '" class="' + (S.tab === k ? 'on' : '') + '">' + ic(t[1]) + t[0] + '</button>'; });
   nav.innerHTML = n;
   bind();
+  sortable(document.getElementById('tl'), '.tile[data-s]', function (arr) {
+    T = arr.map(function (el) { return el.dataset.s; }); saveTriggers(); render();
+  });
 }
 
 /* ---------- actions ---------- */
@@ -261,9 +307,9 @@ function addTrigger(v) {
 function bind() {
   function q(s, f) { main.querySelectorAll(s).forEach(f); }
   nav.querySelectorAll('[data-n]').forEach(function (b) {
-    b.onclick = function () { S.tab = +b.dataset.n; S.open = -1; S.arm = ''; S.msg = ''; S.err = false; render(); main.scrollTop = 0; };
+    b.onclick = function () { if (Date.now() - noClick < 450) return; S.tab = +b.dataset.n; S.open = -1; S.arm = ''; S.msg = ''; S.err = false; render(); main.scrollTop = 0; };
   });
-  q('[data-s]', function (b) { b.onclick = function () { S.sel = b.dataset.s; setMeta('sel', S.sel); render(); }; });
+  q('[data-s]', function (b) { b.onclick = function () { if (Date.now() - noClick < 450) return; S.sel = b.dataset.s; setMeta('sel', S.sel); render(); }; });
   var ad = main.querySelector('#ad');
   if (ad) ad.onclick = function () { S.adding = !S.adding; render(); var i = document.getElementById('nt'); if (i) i.focus(); };
   var ntok = main.querySelector('#ntok'), nt = main.querySelector('#nt');
@@ -420,7 +466,7 @@ function updateCardH() {
     '<div class="note" style="margin:4px 0 0">נבדק לאחרונה: ' + (U.last || 'עוד לא נבדק') + '</div>' +
     (U.avail ? '<div class="note" style="margin:2px 0 0">הגרסה האחרונה בשרת: ' + U.avail.m.version + '</div>' : '') +
     (U.msg ? '<div style="margin-top:8px;font-size:14px;color:#35c4a0">' + esc(U.msg) + '</div>' : '') +
-    '<button class="go" id="chkb" style="margin-top:12px"' + (busy ? ' disabled' : '') + '>' + ic('down', 'sv') + '<span>' + (U.state === 'checking' ? 'בודק...' : (U.avail ? 'עדכן עכשיו' : 'בדוק ועדכן')) + '</span></button>' +
+    '<button class="go" id="chkb" style="margin-top:12px"' + (busy ? ' disabled' : '') + '>' + ic('refresh', 'sv') + '<span>' + (U.state === 'checking' ? 'בודק...' : (U.avail ? 'עדכן עכשיו' : 'בדוק ועדכן')) + '</span></button>' +
     '<p class="note">הנתונים וההגדרות נשמרים. אם עדכון לא עולה, האפליקציה חוזרת לבד לגרסה הקודמת.</p></div>';
 }
 function sheetH() {
@@ -439,7 +485,7 @@ function sheetH() {
   var notes = (m.notes && m.notes.length) ? m.notes : ['שיפורים ותיקונים'];
   notes.forEach(function (n) { h += '<li>' + esc(n) + '</li>'; });
   if (apk) h += '<li>Android ישאל אישור להתקנה</li><li>הנתונים שלך נשארים</li>';
-  h += '</ul><button class="go" id="sgo">' + ic('down', 'sv') + '<span>' + (apk ? 'הורדה והתקנה' : 'עדכון עכשיו') + '</span></button><button class="later" id="slater">לא עכשיו</button></div>';
+  h += '</ul><button class="go" id="sgo">' + ic('refresh', 'sv') + '<span>' + (apk ? 'הורדה והתקנה' : 'עדכון עכשיו') + '</span></button><button class="later" id="slater">לא עכשיו</button></div>';
   return h;
 }
 function renderSheet() {
@@ -530,15 +576,17 @@ function startUpdates() {
 function start() {
   dbOpen().then(function () {
     S.persisted = !!db;
-    return Promise.all([dbReq('entries', 'readonly', function (s) { return s.getAll(); }), getMeta('triggers'), getMeta('sel'), getMeta('lvl')]);
+    return Promise.all([dbReq('entries', 'readonly', function (s) { return s.getAll(); }), getMeta('triggers'), getMeta('sel'), getMeta('lvl'), getMeta('order')]);
   }).then(function (r) {
     E = Array.isArray(r[0]) ? r[0] : [];
     T = Array.isArray(r[1]) ? r[1] : DEFAULT_TR.slice();
     if (!Array.isArray(r[1])) saveTriggers();
     S.sel = T.indexOf(r[2]) >= 0 ? r[2] : (T[0] || '');
     if (typeof r[3] === 'number') S.lvl = r[3];
+    if (Array.isArray(r[4]) && r[4].length === 4 && [0, 1, 2, 3].every(function (k) { return r[4].indexOf(k) >= 0; })) S.order = r[4];
     document.getElementById('date').textContent = new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'numeric' });
     render();
+    sortable(nav, 'button[data-n]', function (arr) { S.order = arr.map(function (el) { return +el.dataset.n; }); setMeta('order', S.order); render(); });
     startUpdates();
     try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
   });
