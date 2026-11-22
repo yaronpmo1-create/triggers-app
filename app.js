@@ -56,14 +56,20 @@ function mix(a, b, t) {
   return '#' + r.map(function (n) { return ('0' + n.toString(16)).slice(-2); }).join('');
 }
 /* intensity scale: green (weak) to dark red (strong) */
-var STOPS = [[0, '#2ecc71'], [4, '#f1c40f'], [6.5, '#f39c12'], [8.5, '#e74c3c'], [10, '#8b0000']];
+var STOPS = [[0, '#2ecc71'], [3, '#f1c40f'], [5, '#e74c3c'], [7.5, '#c0392b'], [10, '#8b0000']];
 function lvColor(v) {
   for (var i = 1; i < STOPS.length; i++) {
     if (v <= STOPS[i][0]) { var a = STOPS[i - 1], b = STOPS[i]; return mix(a[1], b[1], (v - a[0]) / (b[0] - a[0])); }
   }
   return STOPS[STOPS.length - 1][1];
 }
-var GRAD = 'linear-gradient(to left,#2ecc71 0%,#f1c40f 40%,#f39c12 65%,#e74c3c 85%,#8b0000 100%)';
+var GRAD = 'linear-gradient(to left,#2ecc71 0%,#f1c40f 30%,#e74c3c 50%,#c0392b 75%,#8b0000 100%)';
+function lum(c) { var x = hex2(c); return (0.299 * x[0] + 0.587 * x[1] + 0.114 * x[2]) / 255; }
+/* main button follows the intensity color; text flips to white on dark reds */
+function bigStyle(v) {
+  var c = lvColor(v), x = hex2(c).join(',');
+  return '--c:' + c + ';--h1:rgba(' + x + ',.22);--h2:rgba(' + x + ',.10);color:' + (lum(c) > 0.5 ? '#0f141a' : '#ffffff');
+}
 function flBg(v) { return 'background-image:' + GRAD + ';background-size:' + Math.round(1000 / Math.max(v, 0.3)) + '% 100%;background-position:right;background-repeat:no-repeat'; }
 
 /* ---------- storage: IndexedDB with in-memory fallback ---------- */
@@ -143,8 +149,8 @@ function homeH() {
     h += '<div class="sl" id="b5" tabindex="0" role="slider" aria-label="עוצמה" aria-valuemin="0" aria-valuemax="10" aria-valuenow="' + fmt(S.lvl) + '"><div class="tk"></div><div class="fl" style="width:' + S.lvl * 10 + '%;' + flBg(S.lvl) + '"></div><div class="th" style="inset-inline-start:calc(' + S.lvl * 10 + '% - 14px);background:' + lvColor(S.lvl) + '"></div></div>';
     h += '<div class="lvs"><span>0</span><span>10</span></div>';
     var today = startOfDay(Date.now()), cs = E.filter(function (x) { return x.tr === S.sel && x.ts >= today; }).length;
-    var bc = colorOf(S.sel);
-    h += '<div class="bigwrap"><button class="big" id="bg" style="--c:' + bc + ';--cl:' + mix(bc, '#ffffff', 0.45) + ';--cd:' + mix(bc, '#000000', 0.4) + '">' + tic(S.sel).replace(/style="color:[^"]*"/, '') + '<span>' + esc(S.sel) + '</span><small>היום: ' + cs + '</small></button></div>';
+    h += '<div class="bigwrap"><button class="big' + (S.pulse ? ' pulse' : '') + '" id="bg" style="' + bigStyle(S.lvl) + '">' + tic(S.sel).replace(/style="color:[^"]*"/, '') + '<span>' + esc(S.sel) + '</span><small>היום: ' + cs + '</small></button></div>';
+    S.pulse = false;
     h += '<div class="hint">לחיצה רושמת: ' + esc(S.sel) + ', עוצמה ' + fmt(S.lvl) + '</div>';
   }
   var L = entryById(S.last);
@@ -270,7 +276,7 @@ function bind() {
   if (bg) bg.onclick = function () {
     try { if (navigator.vibrate) navigator.vibrate(18); } catch (x) {}
     var e = { id: nextId(), tr: S.sel, lv: S.lvl, ts: Date.now(), n: '', help: '' };
-    E.push(e); saveEntry(e); S.last = e.id; S.toast = true; S.detail = false; render();
+    E.push(e); saveEntry(e); S.last = e.id; S.toast = true; S.detail = false; S.pulse = true; render();
   };
   q('[data-more]', function (b) { b.onclick = function () { S.detail = true; render(); var i = document.getElementById('nn'); if (i) i.focus(); }; });
   q('[data-undo]', function (b) { b.onclick = function () { removeEntry(+b.dataset.undo); S.toast = false; S.detail = false; S.last = -1; render(); }; });
@@ -301,6 +307,7 @@ function bind() {
       th.style.background = c;
       b5.setAttribute('aria-valuenow', fmt(v));
       var ln = document.getElementById('lvn'); ln.textContent = fmt(v); ln.style.color = c;
+      var bgb = document.getElementById('bg'); if (bgb) bgb.setAttribute('style', bigStyle(v));
       var hn = main.querySelector('.hint'); if (hn) hn.textContent = 'לחיצה רושמת: ' + S.sel + ', עוצמה ' + fmt(v);
     };
     var fromX = function (e) { var r = b5.getBoundingClientRect(); setL((r.right - e.clientX) / r.width * 10); };
@@ -334,7 +341,7 @@ function bind() {
   if (stok) stok.onclick = doAdd2;
   if (st) st.onkeydown = function (e) { if (e.key === 'Enter') doAdd2(); };
   var chkb = main.querySelector('#chkb');
-  if (chkb) chkb.onclick = function () { checkUpdate(true); };
+  if (chkb) chkb.onclick = function () { checkUpdate(true, true); };
   var ex = main.querySelector('#ex'), im = main.querySelector('#im'), fi = main.querySelector('#fi'), clr = main.querySelector('#clr');
   if (ex) ex.onclick = exportData;
   if (im) im.onclick = function () { fi.click(); };
@@ -409,9 +416,13 @@ function updHeader() {
 }
 function updateCardH() {
   if (!TRP) return '<div class="card"><h4>עדכון האפליקציה</h4><p class="note" style="margin:0">האתר מתעדכן לבד בכל פתיחה עם אינטרנט.</p></div>';
-  return '<div class="card"><h4>עדכון האפליקציה</h4><div class="flex"><span style="flex:1;font-size:14.5px">גרסה ' + (U.cur || '—') +
-    '<small style="display:block;color:#8e98a8;font-size:12px;margin-top:2px">' + (U.avail ? 'יש גרסה חדשה: ' + U.avail.m.version : (U.last ? 'נבדק לאחרונה: ' + U.last : 'עוד לא נבדק')) +
-    '</small></span><button class="pill" id="chkb">' + (U.avail ? 'פתיחת העדכון' : 'בדיקת עדכון') + '</button></div></div>';
+  var busy = U.state === 'checking' || U.state === 'down' || U.state === 'wait';
+  return '<div class="card"><h4>עדכון האפליקציה</h4><div style="font-weight:600;font-size:15px">גרסת האפליקציה: ' + (U.cur || '—') + '</div>' +
+    '<div class="note" style="margin:4px 0 0">נבדק לאחרונה: ' + (U.last || 'עוד לא נבדק') + '</div>' +
+    (U.avail ? '<div class="note" style="margin:2px 0 0">הגרסה האחרונה בשרת: ' + U.avail.m.version + '</div>' : '') +
+    (U.msg ? '<div style="margin-top:8px;font-size:14px;color:#35c4a0">' + esc(U.msg) + '</div>' : '') +
+    '<button class="go" id="chkb" style="margin-top:12px"' + (busy ? ' disabled' : '') + '>' + ic('down', 'sv') + '<span>' + (U.state === 'checking' ? 'בודק...' : (U.avail ? 'עדכן עכשיו' : 'בדוק ועדכן')) + '</span></button>' +
+    '<p class="note">הנתונים וההגדרות נשמרים. אם עדכון לא עולה, האפליקציה חוזרת לבד לגרסה הקודמת.</p></div>';
 }
 function sheetH() {
   var a = U.avail, h = '<div class="sheet"><div class="grab"></div>';
@@ -449,21 +460,33 @@ function updProg(pct) {
   if (pb) pb.style.width = Math.max(pct, 4) + '%';
   if (pt) pt.textContent = pct >= 0 ? pct + '%' : 'מוריד...';
 }
-function checkUpdate(manual) {
+/* manual: user asked. direct: from the settings button, which updates right away (no sheet unless an APK is needed). */
+function checkUpdate(manual, direct) {
   if (!TRP) return;
-  if (manual && U.avail) { U.sheet = true; U.state = 'idle'; renderSheet(); return; }
+  U.msg = '';
+  if (manual && U.avail) {
+    if (direct && U.avail.type === 'ota') { U.sheet = true; applyUpdate(); return; }
+    U.sheet = true; U.state = 'idle'; renderSheet(); return;
+  }
   U.state = 'checking'; updHeader();
-  if (manual) { U.sheet = true; renderSheet(); }
+  if (manual && !direct) { U.sheet = true; renderSheet(); }
+  if (S.tab === 3) render();
   TRP.otaFetch({ url: REL + 'ota.json' }).then(function (r) {
     var m = JSON.parse(r.text);
     U.last = hm(Date.now());
     U.avail = m.version > U.cur ? { m: m, type: m.minNative > U.info.native ? 'apk' : 'ota' } : null;
     U.state = 'idle'; updHeader();
+    if (direct) {
+      if (U.avail) { U.sheet = true; if (U.avail.type === 'ota') { applyUpdate(); return; } }
+      else U.msg = 'אין עדכון חדש. הגרסה שלך היא האחרונה.';
+    }
     if (U.sheet) renderSheet();
     if (S.tab === 3) render();
   }).catch(function () {
-    U.state = manual ? 'err' : 'idle'; updHeader();
+    U.state = manual && !direct ? 'err' : 'idle'; updHeader();
+    if (direct) { U.msg = 'הבדיקה לא הצליחה. בדוק חיבור לאינטרנט.'; }
     if (U.sheet) renderSheet();
+    if (S.tab === 3) render();
   });
 }
 function applyUpdate() {
