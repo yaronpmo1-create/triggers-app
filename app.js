@@ -223,7 +223,7 @@ function statsH() {
 }
 
 function settingsH() {
-  var h = '<div class="card"><h4>הטריגרים שלי</h4>';
+  var h = updateCardH() + '<div class="card"><h4>הטריגרים שלי</h4>';
   T.forEach(function (t, k) {
     h += '<div class="lrow"><span class="ri">' + tic(t) + '</span><span class="sp">' + esc(t) + '</span><button class="ibtn red" data-rm="' + k + '" title="הסרת הטריגר" aria-label="הסרת ' + esc(t) + '">' + ic('trash') + '</button></div>';
   });
@@ -239,7 +239,6 @@ function settingsH() {
     (S.arm === 'all'
       ? '<button class="act2 red" id="clr">' + ic('trash') + '<span>לחיצה נוספת מוחקת את כל הרישומים</span></button>'
       : '<button class="act2 red" id="clr">' + ic('trash') + '<span>מחיקת כל הרישומים</span></button>') + '</div>';
-  h += updateCardH();
   h += '<div class="card"><h4>על האפליקציה</h4><p class="note" style="margin:0;color:#c5ccd6">כלי להתבוננות עצמית, לא טיפול ולא ייעוץ רפואי. אם קשה לך, כדאי לפנות לאיש מקצוע.</p></div>';
   return h;
 }
