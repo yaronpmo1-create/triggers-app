@@ -59,6 +59,7 @@ function mix(a, b, t) {
 /* intensity scale: green (weak) to dark red (strong) */
 var STOPS = [[0, '#2ecc71'], [3, '#f1c40f'], [5, '#e74c3c'], [7.5, '#c0392b'], [10, '#8b0000']];
 function lvColor(v) {
+  v = (Math.min(10, Math.max(1, v)) - 1) / 9 * 10;
   for (var i = 1; i < STOPS.length; i++) {
     if (v <= STOPS[i][0]) { var a = STOPS[i - 1], b = STOPS[i]; return mix(a[1], b[1], (v - a[0]) / (b[0] - a[0])); }
   }
@@ -71,7 +72,8 @@ function bigStyle(v) {
   var c = lvColor(v), x = hex2(c).join(',');
   return '--c:' + c + ';--h1:rgba(' + x + ',.22);--h2:rgba(' + x + ',.10);color:' + (lum(c) > 0.5 ? '#0f141a' : '#ffffff');
 }
-function flBg(v) { return 'background-image:' + GRAD + ';background-size:' + Math.round(1000 / Math.max(v, 0.3)) + '% 100%;background-position:right;background-repeat:no-repeat'; }
+function fr(v) { return Math.min(1, Math.max(0, (v - 1) / 9)); }
+function flBg(v) { return 'background-image:' + GRAD + ';background-size:' + Math.round(100 / Math.max(fr(v), 0.03)) + '% 100%;background-position:right;background-repeat:no-repeat'; }
 
 /* ---------- storage: IndexedDB with in-memory fallback ---------- */
 var db = null;
@@ -144,21 +146,22 @@ function top30H() {
 
 function homeH() {
   var h = '';
-  if (!T.length) h += '<div class="empty">עוד אין טריגרים. מוסיפים את הראשון:</div>';
-  h += '<div class="tiles" id="tl">';
-  T.forEach(function (t) {
-    h += '<button class="tile' + (S.sel === t ? ' on' : '') + '" style="--c:' + colorOf(t) + '" data-s="' + esc(t) + '" title="' + esc(t) + '" aria-label="' + esc(t) + '">' + tic(t) + '<span>' + esc(t) + '</span></button>';
-  });
-  h += '<button class="tile add" id="ad" title="טריגר חדש" aria-label="טריגר חדש">' + ic('+', 'tic') + '<span>חדש</span></button></div>';
-  if (S.adding) h += '<div class="flex" style="margin-top:10px"><input class="in" id="nt" placeholder="שם הטריגר החדש" maxlength="30"><button class="ibtn" id="ntok" title="הוספה" aria-label="הוספת טריגר">' + ic('check') + '</button></div>';
+  if (!T.length) h += '<div class="empty" style="margin-top:20dvh">עוד אין טריגרים. מוסיפים את הראשון:</div>';
   if (T.length) {
     var today = startOfDay(Date.now()), cs = E.filter(function (x) { return x.tr === S.sel && x.ts >= today; }).length;
     h += '<div class="bigwrap"><button class="big' + (S.pulse ? ' pulse' : '') + '" id="bg" style="' + bigStyle(S.lvl) + '">' + tic(S.sel).replace(/style="color:[^"]*"/, '') + '<span>' + esc(S.sel) + '</span><small>היום: ' + cs + '</small></button></div>';
     S.pulse = false;
     h += '<div class="lbl flex" style="justify-content:space-between"><span>עוצמה: מחליקים אצבע על הפס</span><b id="lvn" style="color:' + lvColor(S.lvl) + ';font-size:16px">' + fmt(S.lvl) + '</b></div>';
-    h += '<div class="sl" id="b5" tabindex="0" role="slider" aria-label="עוצמה" aria-valuemin="0" aria-valuemax="10" aria-valuenow="' + fmt(S.lvl) + '"><div class="tk"></div><div class="fl" style="width:' + S.lvl * 10 + '%;' + flBg(S.lvl) + '"></div><div class="th" style="inset-inline-start:calc(' + S.lvl * 10 + '% - 14px);background:' + lvColor(S.lvl) + '"></div></div>';
-    h += '<div class="lvs"><span>0</span><span>10</span></div>';
+    h += '<div class="sl" id="b5" tabindex="0" role="slider" aria-label="עוצמה" aria-valuemin="1" aria-valuemax="10" aria-valuenow="' + fmt(S.lvl) + '"><div class="tk"></div><div class="fl" style="width:' + fr(S.lvl) * 100 + '%;' + flBg(S.lvl) + '"></div><div class="th" style="inset-inline-start:calc(' + fr(S.lvl) * 100 + '% - 14px);background:' + lvColor(S.lvl) + '"></div></div>';
+    h += '<div class="lvs"><span>1</span><span>10</span></div>';
+    h += '<div class="tiles" id="tl">';
+    T.forEach(function (t) {
+      h += '<button class="tile' + (S.sel === t ? ' on' : '') + '" style="--c:' + colorOf(t) + '" data-s="' + esc(t) + '" title="' + esc(t) + '" aria-label="' + esc(t) + '">' + tic(t) + '<span>' + esc(t) + '</span></button>';
+    });
+    h += '</div>';
   }
+  h += '<button class="newb" id="ad" title="טריגר חדש" aria-label="טריגר חדש">' + ic('+', 'sv') + '<span>טריגר חדש</span></button>';
+  if (S.adding) h += '<div class="flex" style="margin-top:10px"><input class="in" id="nt" placeholder="שם הטריגר החדש" maxlength="30"><button class="ibtn" id="ntok" title="הוספה" aria-label="הוספת טריגר">' + ic('check') + '</button></div>';
   var L = entryById(S.last);
   if (S.toast && L) {
     h += '<div class="card flex"><span style="flex:1">נרשם ב-' + hm(L.ts) + ': ' + esc(L.tr) + ', עוצמה ' + fmt(L.lv) + '</span>';
@@ -344,18 +347,18 @@ function bind() {
   if (b5) {
     var dr = false;
     var setL = function (v) {
-      v = Math.round(Math.min(10, Math.max(0, v)) * 10) / 10; S.lvl = v;
+      v = Math.round(Math.min(10, Math.max(1, v)) * 10) / 10; S.lvl = v;
       var fl = b5.querySelector('.fl'), th = b5.querySelector('.th'), c = lvColor(v);
-      fl.style.width = v * 10 + '%';
-      fl.style.backgroundSize = Math.round(1000 / Math.max(v, 0.3)) + '% 100%';
-      th.style.insetInlineStart = 'calc(' + v * 10 + '% - 14px)';
+      fl.style.width = fr(v) * 100 + '%';
+      fl.style.backgroundSize = Math.round(100 / Math.max(fr(v), 0.03)) + '% 100%';
+      th.style.insetInlineStart = 'calc(' + fr(v) * 100 + '% - 14px)';
       th.style.background = c;
       b5.setAttribute('aria-valuenow', fmt(v));
       var ln = document.getElementById('lvn'); ln.textContent = fmt(v); ln.style.color = c;
       var bgb = document.getElementById('bg'); if (bgb) bgb.setAttribute('style', bigStyle(v));
       var hn = main.querySelector('.hint'); if (hn) hn.textContent = 'לחיצה רושמת: ' + S.sel + ', עוצמה ' + fmt(v);
     };
-    var fromX = function (e) { var r = b5.getBoundingClientRect(); setL((r.right - e.clientX) / r.width * 10); };
+    var fromX = function (e) { var r = b5.getBoundingClientRect(); setL(1 + Math.min(1, Math.max(0, (r.right - e.clientX) / r.width)) * 9); };
     b5.addEventListener('pointerdown', function (e) { dr = true; try { b5.setPointerCapture(e.pointerId); } catch (x) {} fromX(e); });
     b5.addEventListener('pointermove', function (e) { if (dr) fromX(e); });
     b5.addEventListener('pointerup', function () { dr = false; setMeta('lvl', S.lvl); });
@@ -434,7 +437,7 @@ function importData(file) {
       d.entries.forEach(function (x) {
         if (!x || typeof x.tr !== 'string' || typeof x.ts !== 'number') return;
         var k = x.ts + '|' + x.tr; if (seen[k]) return; seen[k] = true;
-        var lv = Math.min(10, Math.max(0, Number(x.lv) || 0));
+        var lv = Math.min(10, Math.max(1, Number(x.lv) || 1));
         var e = { id: nextId(), tr: x.tr.slice(0, 30), lv: lv, ts: x.ts, n: String(x.n || '').slice(0, 500), help: String(x.help || '').slice(0, 500) };
         E.push(e); saveEntry(e); added++;
       });
@@ -582,7 +585,7 @@ function start() {
     T = Array.isArray(r[1]) ? r[1] : DEFAULT_TR.slice();
     if (!Array.isArray(r[1])) saveTriggers();
     S.sel = T.indexOf(r[2]) >= 0 ? r[2] : (T[0] || '');
-    if (typeof r[3] === 'number') S.lvl = r[3];
+    if (typeof r[3] === 'number') S.lvl = Math.min(10, Math.max(1, r[3]));
     if (Array.isArray(r[4]) && r[4].length === 4 && [0, 1, 2, 3].every(function (k) { return r[4].indexOf(k) >= 0; })) S.order = r[4];
     document.getElementById('date').textContent = new Date().toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'numeric' });
     render();
